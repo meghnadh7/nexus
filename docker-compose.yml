@@ -1,0 +1,131 @@
+version: "3.9"
+
+x-common-env: &common-env
+  env_file: .env
+
+services:
+  # ─── Infrastructure ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nexus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── MCP Servers ─────────────────────────────────────────────────────────────
+  mcp-github:
+    build:
+      context: ./services/mcp-github
+      target: production
+    <<: *common-env
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8001/health').raise_for_status()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp-slack:
+    build:
+      context: ./services/mcp-slack
+      target: production
+    <<: *common-env
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8002/health').raise_for_status()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp-jira:
+    build:
+      context: ./services/mcp-jira
+      target: production
+    <<: *common-env
+    ports:
+      - "8003:8003"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8003/health').raise_for_status()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mcp-datadog:
+    build:
+      context: ./services/mcp-datadog
+      target: production
+    <<: *common-env
+    ports:
+      - "8004:8004"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8004/health').raise_for_status()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Orchestrator ─────────────────────────────────────────────────────────────
+  orchestrator:
+    build:
+      context: ./services
+      dockerfile: orchestrator/Dockerfile
+      target: production
+    <<: *common-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mcp-github:
+        condition: service_healthy
+      mcp-slack:
+        condition: service_healthy
+      mcp-jira:
+        condition: service_healthy
+      mcp-datadog:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8000/health').raise_for_status()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── RAG Indexer (one-shot service) ──────────────────────────────────────────
+  rag-indexer:
+    build:
+      context: ./services/rag-indexer
+      target: production
+    <<: *common-env
+    profiles:
+      - indexer
+    volumes:
+      - .:/repo:ro
+
+volumes:
+  postgres_data:
+  redis_data:

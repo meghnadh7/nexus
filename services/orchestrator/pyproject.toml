@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-orchestrator"
+version = "1.0.0"
+description = "Nexus multi-agent orchestrator"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi==0.111.0",
+    "uvicorn[standard]==0.29.0",
+    # LangGraph 0.2.x + LangChain 0.3.x ecosystem (verified compatible set)
+    "langgraph==0.2.73",
+    "langchain==0.3.28",
+    "langchain-openai==0.2.14",
+    "langchain-core==0.3.83",
+    # LangGraph Postgres checkpointer (2.x works with langgraph-checkpoint 2.x)
+    "langgraph-checkpoint-postgres==2.0.25",
+    # OpenAI SDK — must match langchain-openai 0.2.14 requirement (>=1.58.1)
+    "openai>=1.58.1,<2.0.0",
+    # httpx — must stay <0.28 because openai passes 'proxies' kwarg removed in 0.28
+    "httpx>=0.27.0,<0.28.0",
+    # Pinecone (for RAG retrieval)
+    "pinecone==3.2.2",
+    # Database
+    "asyncpg==0.29.0",
+    "sqlalchemy[asyncio]==2.0.30",
+    "psycopg[binary]>=3.1.19",
+    "psycopg-pool>=3.2.2",
+    # Retries
+    "tenacity==8.3.0",
+    # Logging
+    "structlog==24.2.0",
+    # Config
+    "pydantic>=2.7.4",
+    "pydantic-settings>=2.2.1",
+    # Metrics
+    "prometheus-client==0.20.0",
+    # Redis (rate limiting / caching)
+    "redis[hiredis]==5.0.4",
+    # rag-indexer is installed as a sibling package — see Makefile / Dockerfile.
+    # Install order: pip install -e services/rag-indexer THEN pip install -e services/orchestrator
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.2.0",
+    "pytest-asyncio==0.23.7",
+    "pytest-mock==3.14.0",
+    "httpx==0.27.0",
+    "ruff==0.4.4",
+    "mypy==1.10.0",
+    "alembic==1.13.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests that require real API keys (deselect with -m 'not integration')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true

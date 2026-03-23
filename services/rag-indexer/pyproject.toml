@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-indexer"
+version = "1.0.0"
+description = "Nexus RAG codebase indexer"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.58.1,<2.0.0",
+    "pinecone==3.2.2",
+    "structlog==24.2.0",
+    "tenacity==8.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.2.0",
+    "pytest-asyncio==0.23.7",
+    "ruff==0.4.4",
+    "mypy==1.10.0",
+]
+
+[project.scripts]
+rag-indexer = "rag_indexer.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

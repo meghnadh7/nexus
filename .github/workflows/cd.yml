@@ -1,0 +1,88 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/nexus
+  NAMESPACE: nexus
+
+jobs:
+  deploy:
+    name: "Deploy to ${{ inputs.environment || 'staging' }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl v1.29
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Set up Helm v3.14
+        uses: azure/setup-helm@v3
+        with:
+          version: "v3.14.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy with Helm
+        run: |
+          HELM_ARGS=(
+            upgrade --install nexus ./infra/helm/nexus
+            --namespace $NAMESPACE
+            --create-namespace
+            --values ./infra/helm/nexus/values.yaml
+            --set global.imageTag=${{ steps.tag.outputs.sha }}
+            --set global.registry=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}
+            --wait
+            --timeout 5m
+          )
+          if [[ "${{ inputs.environment || 'staging' }}" == "production" ]]; then
+            HELM_ARGS+=(--values ./infra/helm/nexus/values-prod.yaml)
+          fi
+          helm "${HELM_ARGS[@]}"
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/nexus-orchestrator \
+            -n $NAMESPACE \
+            --timeout=3m
+
+      - name: Notify Slack — success
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"✅ Nexus deployed to *${{ inputs.environment || 'staging' }}* successfully. SHA: \`${{ steps.tag.outputs.sha }}\`\"}"
+
+      - name: Notify Slack — failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"❌ Nexus deployment to *${{ inputs.environment || 'staging' }}* FAILED. SHA: \`${{ steps.tag.outputs.sha }}\`. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"}"

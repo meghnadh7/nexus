@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexus-orchestrator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-orchestrator
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.orchestrator.service.type }}
+  selector:
+    app: nexus-orchestrator
+  ports:
+    - name: http
+      port: {{ .Values.orchestrator.service.port }}
+      targetPort: 8000
+      protocol: TCP

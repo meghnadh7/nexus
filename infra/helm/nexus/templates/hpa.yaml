@@ -1,0 +1,24 @@
+{{- if .Values.orchestrator.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nexus-orchestrator-hpa
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-orchestrator
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexus-orchestrator
+  minReplicas: {{ .Values.orchestrator.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.orchestrator.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.orchestrator.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

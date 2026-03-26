@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-rag-indexer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-rag-indexer
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.ragIndexer.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 1001
+            runAsNonRoot: true
+          initContainers:
+            - name: git-clone
+              image: alpine/git:2.43.0
+              command:
+                - sh
+                - -c
+                - |
+                  git clone --depth=1 --branch {{ .Values.ragIndexer.repoBranch }} \
+                    {{ .Values.ragIndexer.repoUrl }} /repo
+              volumeMounts:
+                - name: repo-volume
+                  mountPath: /repo
+          containers:
+            - name: rag-indexer
+              image: "{{ .Values.global.registry }}/{{ .Values.ragIndexer.image.repository }}:{{ .Values.global.imageTag }}"
+              imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+              env:
+                - name: REPO_PATH
+                  value: /repo
+              envFrom:
+                {{- include "nexus.secretRef" . | nindent 16 }}
+              command:
+                - python
+                - -m
+                - rag_indexer.main
+                - --repo-path
+                - /repo
+              volumeMounts:
+                - name: repo-volume
+                  mountPath: /repo
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: {{ .Values.ragIndexer.resources.requests.cpu }}
+                  memory: {{ .Values.ragIndexer.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.ragIndexer.resources.limits.cpu }}
+                  memory: {{ .Values.ragIndexer.resources.limits.memory }}
+          volumes:
+            - name: repo-volume
+              emptyDir: {}

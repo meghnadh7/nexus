@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-mcp-jira
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-jira
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpJira.replicaCount }}
+  selector:
+    matchLabels:
+      app: nexus-mcp-jira
+  template:
+    metadata:
+      labels:
+        app: nexus-mcp-jira
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+      containers:
+        - name: mcp-jira
+          image: "{{ .Values.global.registry }}/{{ .Values.mcpJira.image.repository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8003
+              name: http
+          envFrom:
+            {{- include "nexus.secretRef" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.mcpJira.resources.requests.cpu }}
+              memory: {{ .Values.mcpJira.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.mcpJira.resources.limits.cpu }}
+              memory: {{ .Values.mcpJira.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-jira
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-jira
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-mcp-jira
+  ports:
+    - name: http
+      port: {{ .Values.mcpJira.service.port }}
+      targetPort: 8003

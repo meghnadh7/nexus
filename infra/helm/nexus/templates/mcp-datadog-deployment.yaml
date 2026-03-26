@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-mcp-datadog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-datadog
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpDatadog.replicaCount }}
+  selector:
+    matchLabels:
+      app: nexus-mcp-datadog
+  template:
+    metadata:
+      labels:
+        app: nexus-mcp-datadog
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+      containers:
+        - name: mcp-datadog
+          image: "{{ .Values.global.registry }}/{{ .Values.mcpDatadog.image.repository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8004
+              name: http
+          envFrom:
+            {{- include "nexus.secretRef" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.mcpDatadog.resources.requests.cpu }}
+              memory: {{ .Values.mcpDatadog.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.mcpDatadog.resources.limits.cpu }}
+              memory: {{ .Values.mcpDatadog.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-datadog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-datadog
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-mcp-datadog
+  ports:
+    - name: http
+      port: {{ .Values.mcpDatadog.service.port }}
+      targetPort: 8004

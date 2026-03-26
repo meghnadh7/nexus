@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-mcp-slack
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-slack
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpSlack.replicaCount }}
+  selector:
+    matchLabels:
+      app: nexus-mcp-slack
+  template:
+    metadata:
+      labels:
+        app: nexus-mcp-slack
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+      containers:
+        - name: mcp-slack
+          image: "{{ .Values.global.registry }}/{{ .Values.mcpSlack.image.repository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8002
+              name: http
+          envFrom:
+            {{- include "nexus.secretRef" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.mcpSlack.resources.requests.cpu }}
+              memory: {{ .Values.mcpSlack.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.mcpSlack.resources.limits.cpu }}
+              memory: {{ .Values.mcpSlack.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-slack
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-slack
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-mcp-slack
+  ports:
+    - name: http
+      port: {{ .Values.mcpSlack.service.port }}
+      targetPort: 8002

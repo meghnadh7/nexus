@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-mcp-github
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-github
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpGithub.replicaCount }}
+  selector:
+    matchLabels:
+      app: nexus-mcp-github
+  template:
+    metadata:
+      labels:
+        app: nexus-mcp-github
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+      containers:
+        - name: mcp-github
+          image: "{{ .Values.global.registry }}/{{ .Values.mcpGithub.image.repository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8001
+              name: http
+          envFrom:
+            {{- include "nexus.secretRef" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.mcpGithub.resources.requests.cpu }}
+              memory: {{ .Values.mcpGithub.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.mcpGithub.resources.limits.cpu }}
+              memory: {{ .Values.mcpGithub.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-github
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-mcp-github
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-mcp-github
+  ports:
+    - name: http
+      port: {{ .Values.mcpGithub.service.port }}
+      targetPort: 8001

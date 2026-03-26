@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-orchestrator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-orchestrator
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.orchestrator.replicaCount }}
+  selector:
+    matchLabels:
+      app: nexus-orchestrator
+  template:
+    metadata:
+      labels:
+        app: nexus-orchestrator
+        {{- include "nexus.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        runAsNonRoot: true
+      containers:
+        - name: orchestrator
+          image: "{{ .Values.global.registry }}/{{ .Values.orchestrator.image.repository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            {{- include "nexus.secretRef" . | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.orchestrator.resources.requests.cpu }}
+              memory: {{ .Values.orchestrator.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.orchestrator.resources.limits.cpu }}
+              memory: {{ .Values.orchestrator.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: [ALL]

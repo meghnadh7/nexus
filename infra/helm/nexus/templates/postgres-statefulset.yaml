@@ -1,0 +1,89 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nexus-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-postgres
+    {{- include "nexus.labels" . | nindent 4 }}
+spec:
+  serviceName: nexus-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-postgres
+  template:
+    metadata:
+      labels:
+        app: nexus-postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: nexus
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nexus"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nexus"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.postgres.resources.requests.cpu }}
+              memory: {{ .Values.postgres.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.postgres.resources.limits.cpu }}
+              memory: {{ .Values.postgres.resources.limits.memory }}
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.postgres.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: nexus-postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: nexus-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+{{- end }}
